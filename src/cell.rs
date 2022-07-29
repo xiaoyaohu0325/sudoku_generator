@@ -1,10 +1,12 @@
 #[allow(dead_code)]
 use std::fmt;
+/**
+ * use binary data to represent a cell's number. 2 << (value-1)
+ */
 pub const SOLVED_VALUE: u16 = 511;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Cell {
-    index: u8,
     value: u8,
     candidates: u16,
 }
@@ -16,22 +18,23 @@ pub fn one_hot(value: u8) -> u16 {
 impl Cell {
     pub fn new() -> Self {
         Cell {
-            index: 0,
             value: 0,
             candidates: 0,
         }
     }
 
-    pub fn set_index(&mut self, idx: u8) {
-      self.index = idx;
-    }
-
-    pub fn get_index(&self) -> u8 {
-        self.index
-    }
-
     pub fn is_fixed(&self) -> bool {
         self.value > 0
+    }
+
+    // return two value, (has_candidate, one_hot)
+    pub fn has_candidate(&self, c: u8) -> (bool, u16) {
+        let candidate = one_hot(c);
+        ((self.candidates & candidate) != 0, candidate)
+    }
+
+    pub fn num_candidates(&self) -> u8 {
+        self.candidates.count_ones() as u8
     }
 
     pub fn add_candidate(&mut self, c: u8) {
@@ -48,6 +51,9 @@ impl Cell {
         }
     }
 
+    /**
+     * try to remove a candidate of the cell. If there is only one candidate after removing, apply it as cell's value.
+     */
     pub fn eliminate_candidate(&mut self, c: u8) -> Result<u8, u8> {
         let (has, _) = self.has_candidate(c);
         if has {
@@ -77,6 +83,7 @@ impl Cell {
         self.candidates = 0;
     }
 
+    // apply candidate to self.value if there is only one candidate
     pub fn apply_candidate(&mut self) -> Option<u8> {
         match self.num_candidates() {
             1 => {
@@ -85,16 +92,6 @@ impl Cell {
             }
             _ => None,
         }
-    }
-
-    // return two value, (has_candidate, one_hot)
-    pub fn has_candidate(&self, c: u8) -> (bool, u16) {
-        let candidate = one_hot(c);
-        ((self.candidates & candidate) != 0, candidate)
-    }
-
-    pub fn num_candidates(&self) -> u8 {
-        self.candidates.count_ones() as u8
     }
 
     // get all candidates as an array

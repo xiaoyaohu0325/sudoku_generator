@@ -1,5 +1,17 @@
-use std::fmt;
+use std::{fmt, thread};
+use std::sync::{Mutex, Arc};
+extern crate num_cpus;
 use crate::cell::{Cell, one_hot};
+
+type CellState = (u8, u16);
+
+type BoardState = Vec<CellState>;
+
+struct Strategy {
+  state: BoardState,
+  index: u8,
+  value: u8
+}
 
 type Unit = [u8; 9];
 
@@ -65,18 +77,12 @@ pub struct Board {
 
 impl Board {
     pub fn new() -> Self {
-        let mut board = Board {
+        Board {
             cells: [Cell::new(); 81],
-        };
-
-        // init every cell
-        for i in 0..81 {
-            board.cells[i].set_index(i as u8);
         }
-
-        board
     }
 
+    // reset all cells value
     pub fn reset(&mut self) {
       for cell in &mut self.cells {
         cell.reset();
@@ -92,7 +98,6 @@ impl Board {
         return
       }
       self.reset();
-
       for i in 0..81 {
         if let Some(value) = game.chars().nth(i).unwrap().to_digit(10) {
           let cell = &mut self.cells[i];
@@ -101,7 +106,7 @@ impl Board {
       }
     }
 
-    // init game and fill candidates
+    // fill candidates, then load a new game and update candidates
     pub fn init(&mut self, game: &str) -> Result<bool, bool> {
       if game.len() != 81 {
         return Err(false);
@@ -142,11 +147,13 @@ impl Board {
       }
     }
 
+    /**
+     * cells in a unit should have unique values
+     */
     fn is_unit_compatible(&self, unit: &Unit) -> bool {
       let mut result: u16 = 0;
-      for i in 0..9 {
-        let idx = unit[i] as usize;
-        let cell = &self.cells[idx];
+      for index in unit {
+        let cell = &self.cells[*index as usize];
         if cell.is_fixed() {
           let value = one_hot(cell.get_value());
           if (value & result) > 0 {
@@ -184,6 +191,9 @@ impl Board {
       return true;
     }
 
+    /**
+     * try to assign a new value to a cell, check validity during the process.
+     */
     fn assign_cell(&mut self, index: u8, value: u8) -> bool {
       let cell = &mut self.cells[index as usize];
       let row = index / 9;
@@ -208,6 +218,7 @@ impl Board {
       true
     }
 
+    // remove the candidate from specified units
     fn eliminate_unit_candidate(&mut self, unit: &Unit, candidate: u8) -> bool {
       for index in unit {
         let cell = &mut self.cells[*index as usize];
@@ -221,8 +232,8 @@ impl Board {
         }
         // only has one candidate after removing
         let fixed = cell.is_fixed();
-        let value = cell.get_value();
         if fixed {
+          let value = cell.get_value();
           if !self.assign_cell(*index, value) {
             return false;
           }
@@ -253,7 +264,7 @@ impl Board {
             break;
           } else if cell.has_candidate(candidate).0 {
             num_cells += 1;
-            cell_has_it = Some(cell.get_index());
+            cell_has_it = Some(*index);
           }
         }
 
@@ -263,22 +274,20 @@ impl Board {
           }
         }
       }
-      return true;
+      true
     }
 
-    fn solve(&mut self) -> bool {
-      if self.is_solved() {
-        return true;
-      }
-
-      // find the cell that has minimum candidates
-      let mut index = 0;
+    // find the cell that has minimum candidates
+    fn next_candidate_cell(&self) -> (u8, Vec<u8>) {
+      let mut index:u8 = 0;
       let mut min_candidates = 10;
-      for cell in &self.cells {
+
+      for idx in 0..81 {
+        let cell = &self.cells[idx];
         if !cell.is_fixed() {
           let count = cell.num_candidates();
           if count > 0 && count < min_candidates {
-            index = cell.get_index();
+            index = idx as u8;
             min_candidates = count;
           }
         }
@@ -286,6 +295,19 @@ impl Board {
 
       let cell = &self.cells[index as usize];
       let candidates = cell.collect_candidates();
+
+      return (index, candidates)
+    }
+
+    /**
+     * try to solve current game
+     */
+    fn solve(&mut self) -> bool {
+      if self.is_solved() {
+        return true;
+      }
+
+      let (index, candidates) = self.next_candidate_cell();
       let board_state = self.backup();
 
       // let row = index / 9 + 1;
@@ -309,6 +331,115 @@ impl Board {
       }
 
       false
+    }
+
+    // tasks: [(board_state, index, value)]
+    // thread extract task to execute until solved
+    fn solve_concurrent(&mut self) -> bool {
+      // create send/receiver vars
+      // to move data through channel
+      // thread-safe and lockable
+      let cores = num_cpus::get();
+
+      let (index, candidates) = self.next_candidate_cell();
+      let board_state = self.backup();
+      let mut init_strategy: Vec<Strategy> = Vec::new();
+      for candidate in candidates {
+        init_strategy.push(Strategy {
+          index,
+          state: board_state.clone(),
+          value: candidate
+        });
+      }
+
+      let solved = Arc::new(Mutex::new(false));
+      let strategies = Arc::new(Mutex::new(init_strategy));
+
+      // more than one handle
+      // store them in a vec for convenience
+      let mut handles = vec![];
+      // println!("num of cores: {}", cores);
+
+      for i in 0..cores {
+          // clone the transmitter
+          let solved = Arc::clone(&solved);
+          let strategies = Arc::clone(&strategies);
+          let thread_id = i;
+
+          // create the thread
+          let handle = thread::spawn(move || {
+            loop {
+              // lock the value
+              {
+                let finished = solved.lock().unwrap();
+
+                if *finished {
+                  break;
+                }
+              }
+
+              let mut next_strategy: Option<Strategy> = None;
+              {
+                let mut s_pool = strategies.lock().unwrap();
+                next_strategy = s_pool.pop();
+              }
+
+              if let Some(s) = next_strategy {
+                let mut next_board = Board::new();
+                next_board.restore(&s.state);
+
+                // println!("thread {} assign cell {} with value {}", thread_id, s.index, s.value);
+                if next_board.assign_cell(s.index, s.value) {
+                  if next_board.is_solved() {
+                    let mut s_pool = strategies.lock().unwrap();
+                    let mut finished = solved.lock().unwrap();
+                    // println!("solved in thread {}", thread_id);
+                    *finished = true;
+                    s_pool.clear();
+                    s_pool.push(Strategy {
+                      index: 0,
+                      state: next_board.backup(),
+                      value: 0
+                    });
+                  } else {
+                    let finished = solved.lock().unwrap();
+                    if !*finished {
+                      let mut s_pool = strategies.lock().unwrap();
+                      let (index, candidates) = next_board.next_candidate_cell();
+                      let board_state = next_board.backup();
+                      // println!("thread {} add cell {} with candidate {:?}", thread_id, index, candidates);
+                      for candidate in candidates {
+                        s_pool.push(Strategy {
+                          index,
+                          state: board_state.clone(),
+                          value: candidate
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          // push the handle into the handles
+          // vector so we can join them later
+          handles.push(handle);
+      }
+
+      // join the handles in the vector
+      for i in handles {
+        i.join().unwrap();
+      }
+
+      // all thread finished
+      let mut s_pool = strategies.lock().unwrap();
+      if let Some(s) = s_pool.pop() {
+        self.reset();
+        self.restore(&s.state);
+      }
+      let finished = solved.lock().unwrap();
+      *finished
     }
 
     pub fn serialize(&self) -> String {
@@ -371,6 +502,16 @@ mod tests {
     const GAME: &str = "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......";
 
     #[test]
+    fn is_load_work() {
+      let mut b = Board::new();
+      b.load_game(GAME);
+      assert_eq!(b.cells[0].get_value(), 4);
+      assert_eq!(b.cells[6].get_value(), 8);
+      assert_eq!(b.cells[74].get_value(), 4);
+      println!("{}", b);
+    }
+
+    #[test]
     fn is_init_works() {
         let mut b = Board::new();
         assert_eq!(b.init(GAME), Ok(true));
@@ -396,7 +537,7 @@ mod tests {
     #[test]
     fn is_serialize_works() {
         let mut b = Board::new();
-        assert_eq!(b.init(GAME), Ok(true));
+        b.load_game(GAME);
         assert_eq!(b.serialize(), GAME);
     }
 
@@ -424,6 +565,16 @@ mod tests {
       assert_eq!(b.init(GAME), Ok(true));
       println!("{}", b);
       let success = b.solve();
+      assert_eq!(success, true);
+      println!("{}", b);
+    }
+
+    #[test]
+    fn is_solve_concurrent_works() {
+      let mut b = Board::new();
+      assert_eq!(b.init(GAME), Ok(true));
+      println!("{}", b);
+      let success = b.solve_concurrent();
       assert_eq!(success, true);
       println!("{}", b);
     }
