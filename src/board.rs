@@ -71,8 +71,24 @@ fn get_block_unit_by_pos(row: u8, col: u8) -> &'static Unit {
   get_block_unit_by_index(block_id)
 }
 
+pub fn game_str_to_vec(game: &str) -> Result<Vec<u8>, &str> {
+  if game.len() != 81 {
+    return Err("not valid");
+  }
+  let mut result: Vec<u8> = Vec::with_capacity(81);
+
+  for i in 0..81 {
+    if let Some(value) = game.chars().nth(i).unwrap().to_digit(10) {
+      result.push(value as u8);
+    } else {
+      result.push(0);
+    }
+  }
+  Ok(result)
+}
+
 pub struct Board {
-    cells: [Cell; 81],
+    pub cells: [Cell; 81],
 }
 
 impl Board {
@@ -82,6 +98,27 @@ impl Board {
         }
     }
 
+    pub fn is_valid_game(game: &Vec<u8>) -> bool {
+      let mut board = Board::new();
+      board.load_game(&game);
+
+      for i in 0..9 {
+        let row = get_row_unit(i);
+        if !board.is_unit_compatible(row) {
+          return false;
+        }
+        let col = get_col_unit(i);
+        if !board.is_unit_compatible(col) {
+          return false;
+        }
+        let block = get_block_unit_by_index(i);
+        if !board.is_unit_compatible(block) {
+          return false;
+        }
+      }
+      true
+    }
+
     // reset all cells value
     pub fn reset(&mut self) {
       for cell in &mut self.cells {
@@ -89,25 +126,31 @@ impl Board {
       }
     }
 
+    pub fn fill_candidates(&mut self) {
+      for cell in &mut self.cells {
+        cell.fill_candidates();
+      }
+    }
+
     /**
    * A game is a string of length 81, each character maps to a cell. An example:
    * 4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......
    */
-    pub fn load_game(&mut self, game: &str) {
+    pub fn load_game(&mut self, game: &Vec<u8>) {
       if game.len() != 81 {
         return
       }
       self.reset();
-      for i in 0..81 {
-        if let Some(value) = game.chars().nth(i).unwrap().to_digit(10) {
+      for (i, value) in game.iter().enumerate() {
+        if *value > 0 {
           let cell = &mut self.cells[i];
-          cell.set_value(value as u8);
+          cell.set_value(*value);
         }
       }
     }
 
     // fill candidates, then load a new game and update candidates
-    pub fn init(&mut self, game: &str) -> Result<bool, bool> {
+    pub fn init(&mut self, game: &Vec<u8>) -> Result<bool, bool> {
       if game.len() != 81 {
         return Err(false);
       }
@@ -117,13 +160,14 @@ impl Board {
         cell.fill_candidates();
       }
 
-      for i in 0..81 {
-        if let Some(value) = game.chars().nth(i).unwrap().to_digit(10) {
-          if !self.assign_cell(i as u8, value as u8) {
+      for (i, value) in game.iter().enumerate() {
+        if *value > 0 {
+          if !self.assign_cell(i as u8, *value) {
             return Err(false);
           }
         }
       }
+
       Ok(true)
     }
 
@@ -131,7 +175,7 @@ impl Board {
      * Backup a board to an array of values.
      * Each cell has two ints, first is value and second is candidates
      */
-    fn backup(&self) -> Vec<(u8, u16)> {
+    pub fn backup(&self) -> Vec<(u8, u16)> {
       let mut result: Vec<(u8, u16)> = Vec::with_capacity(81);
       for cell in &self.cells {
         result.push(cell.backup());
@@ -139,7 +183,7 @@ impl Board {
       result
     }
 
-    fn restore(&mut self, data: &Vec<(u8, u16)>) {
+    pub fn restore(&mut self, data: &Vec<(u8, u16)>) {
       for i in 0..81 {
         let cell = &mut self.cells[i];
         let value = data[i];
@@ -166,7 +210,7 @@ impl Board {
       true
     }
 
-    fn is_solved(&self) -> bool {
+    pub fn is_solved(&self) -> bool {
       // 1. all cells are fixed
       for cell in &self.cells {
         if !cell.is_fixed() {
@@ -194,7 +238,7 @@ impl Board {
     /**
      * try to assign a new value to a cell, check validity during the process.
      */
-    fn assign_cell(&mut self, index: u8, value: u8) -> bool {
+    pub fn assign_cell(&mut self, index: u8, value: u8) -> bool {
       let cell = &mut self.cells[index as usize];
       let row = index / 9;
       let col = index % 9;
@@ -278,7 +322,7 @@ impl Board {
     }
 
     // find the cell that has minimum candidates
-    fn next_candidate_cell(&self) -> (u8, Vec<u8>) {
+    pub fn next_candidate_cell(&self) -> (u8, Vec<u8>) {
       let mut index:u8 = 0;
       let mut min_candidates = 10;
 
@@ -302,7 +346,7 @@ impl Board {
     /**
      * try to solve current game
      */
-    fn solve(&mut self) -> bool {
+    pub fn solve(&mut self) -> bool {
       if self.is_solved() {
         return true;
       }
@@ -335,7 +379,7 @@ impl Board {
 
     // tasks: [(board_state, index, value)]
     // thread extract task to execute until solved
-    fn solve_concurrent(&mut self) -> bool {
+    pub fn solve_concurrent(&mut self) -> bool {
       // create send/receiver vars
       // to move data through channel
       // thread-safe and lockable
@@ -498,13 +542,23 @@ impl fmt::Display for Board {
 
 #[cfg(test)]
 mod tests {
-    use super::{Board, get_row_unit, get_col_unit, get_block_unit_by_pos};
+    use super::{Board, get_row_unit, get_col_unit, get_block_unit_by_pos, game_str_to_vec};
     const GAME: &str = "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......";
 
     #[test]
+    fn test_game_to_vec() {
+        let v = game_str_to_vec(GAME).unwrap();
+        assert_eq!(v.len(), 81);
+        assert_eq!(v[0], 4);
+        assert_eq!(v[6], 8);
+        assert_eq!(v[74], 4);
+    }
+
+    #[test]
     fn is_load_work() {
+      let v = game_str_to_vec(GAME).unwrap();
       let mut b = Board::new();
-      b.load_game(GAME);
+      b.load_game(&v);
       assert_eq!(b.cells[0].get_value(), 4);
       assert_eq!(b.cells[6].get_value(), 8);
       assert_eq!(b.cells[74].get_value(), 4);
@@ -513,15 +567,17 @@ mod tests {
 
     #[test]
     fn is_init_works() {
+        let v = game_str_to_vec(GAME).unwrap();
         let mut b = Board::new();
-        assert_eq!(b.init(GAME), Ok(true));
+        assert_eq!(b.init(&v), Ok(true));
         println!("{}", b);
     }
 
     #[test]
     fn is_backup_restore_works() {
+        let v = game_str_to_vec(GAME).unwrap();
         let mut b = Board::new();
-        assert_eq!(b.init(GAME), Ok(true));
+        assert_eq!(b.init(&v), Ok(true));
         let s1 = b.serialize();
 
         let backup = b.backup();
@@ -536,8 +592,9 @@ mod tests {
 
     #[test]
     fn is_serialize_works() {
+        let v = game_str_to_vec(GAME).unwrap();
         let mut b = Board::new();
-        b.load_game(GAME);
+        b.load_game(&v);
         assert_eq!(b.serialize(), GAME);
     }
 
@@ -561,8 +618,9 @@ mod tests {
 
     #[test]
     fn is_solve_works() {
+      let v = game_str_to_vec(GAME).unwrap();
       let mut b = Board::new();
-      assert_eq!(b.init(GAME), Ok(true));
+      assert_eq!(b.init(&v), Ok(true));
       println!("{}", b);
       let success = b.solve();
       assert_eq!(success, true);
@@ -571,8 +629,9 @@ mod tests {
 
     #[test]
     fn is_solve_concurrent_works() {
+      let v = game_str_to_vec(GAME).unwrap();
       let mut b = Board::new();
-      assert_eq!(b.init(GAME), Ok(true));
+      assert_eq!(b.init(&v), Ok(true));
       println!("{}", b);
       let success = b.solve_concurrent();
       assert_eq!(success, true);
