@@ -1,5 +1,6 @@
 use crate::generator;
 use std::borrow::BorrowMut;
+use std::sync::Arc;
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::cell::Cell;
@@ -19,7 +20,7 @@ const BORDER_WIDTH: usize = 63; // 7 * 9
 const BORDER_HEIGHT: usize = 36; // 4 * 9
 
 pub struct BoardView {
-  cells: Vec<Rc<RefCell<Cell>>>,
+  cells: Arc<Vec<Rc<RefCell<Cell>>>>,
 
   focused: Option<usize>,
 
@@ -27,9 +28,10 @@ pub struct BoardView {
 }
 
 impl BoardView {
-  pub fn new(cells: Vec<Rc<RefCell<Cell>>>) -> Self {
+  pub fn new(cells: Arc<Vec<Rc<RefCell<Cell>>>>) -> Self {
     let mut cellviews = Vec::new();
-    for cell in &cells {
+    for i in 0..81 {
+      let cell = &cells[i];
       let cv = CellView::new(Rc::clone(cell), CellMode::Edit, false);
       cellviews.push(cv);
     }
@@ -182,7 +184,7 @@ impl cursive::view::View for BoardView {
           _ => (),
       }
 
-      EventResult::Ignored
+      EventResult::Consumed(None)
   }
 
   fn required_size(&mut self, _: Vec2) -> Vec2 {
