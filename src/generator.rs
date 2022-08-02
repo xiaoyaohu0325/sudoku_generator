@@ -30,7 +30,7 @@ pub fn generate_game() -> String {
   board.serialize()
 }
 
-fn dig_holes(game: &str) -> String {
+pub fn dig_holes(game: &str) -> String {
   let remain_cells = MIN_CELLS + random_index(6);
   let mut can_dig_cells = [true; 81];
   let mut game_vec = game_str_to_vec(game).unwrap();

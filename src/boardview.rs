@@ -1,5 +1,8 @@
-use crate::board::Board;
 use crate::generator;
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
+use std::rc::Rc;
+use crate::cell::Cell;
 use crate::cellview::{CellView, CellMode};
 use cursive::{
   direction::Direction,
@@ -10,14 +13,13 @@ use cursive::{
   Cursive, Printer, Vec2,
 };
 
-const CELL_SIZE: usize = 4;
-const BORDER_SIZE: usize = 36; // 4 * 9
-pub struct BoardView {
-  // Actual board, unknown to the player.
-  board: Board,
+const CELL_WIDTH: usize = 7;
+const CELL_HEIGHT: usize = 4;
+const BORDER_WIDTH: usize = 63; // 7 * 9
+const BORDER_HEIGHT: usize = 36; // 4 * 9
 
-  // Visible board
-  // overlay: Vec<Cell>,
+pub struct BoardView {
+  cells: Vec<Rc<RefCell<Cell>>>,
 
   focused: Option<usize>,
 
@@ -25,16 +27,14 @@ pub struct BoardView {
 }
 
 impl BoardView {
-  pub fn new() -> Self {
-    let mut board = Board::new();
+  pub fn new(cells: Vec<Rc<RefCell<Cell>>>) -> Self {
     let mut cellviews = Vec::new();
-    for cell in &mut board.cells {
-      cell.fill_candidates();
-      let cv = CellView::new(cell.clone(), CellMode::Draft, false);
+    for cell in &cells {
+      let cv = CellView::new(Rc::clone(cell), CellMode::Edit, false);
       cellviews.push(cv);
     }
     BoardView {
-        board,
+        cells,
         cellviews,
         focused: None
     }
@@ -43,25 +43,25 @@ impl BoardView {
   pub fn set_folus_cell(&mut self, index: usize) {
     match self.focused {
         Some(i) => {
-          let cv = CellView::new(self.board.cells[i as usize].clone(), CellMode::Draft, false);
-          self.cellviews[i as usize] = cv;
-          let cv2 = CellView::new(self.board.cells[index].clone(), CellMode::Draft, true);
-          self.cellviews[index] = cv2;
+          let cv = &mut self.cellviews[i as usize];
+          cv.set_active(false);
+          let cv2 = &mut self.cellviews[index as usize];
+          cv2.set_active(true);
         },
         _ => {
-          let cv = CellView::new(self.board.cells[index].clone(), CellMode::Draft, true);
-          self.cellviews[index] = cv;
+          let cv = &mut self.cellviews[index as usize];
+          cv.set_active(true);
         }
     }
-    self.focused = Some(index)
+    self.focused = Some(index);
   }
 }
 
 impl cursive::view::View for BoardView {
   fn draw(&self, printer: &Printer) {
     for index in 0..81 {
-      let r = (index / 9) * CELL_SIZE + 1;
-      let c = (index % 9) * CELL_SIZE + 1;
+      let r = (index / 9) * CELL_HEIGHT + 1;
+      let c = (index % 9) * CELL_WIDTH + 1;
 
       let cv = &self.cellviews[index];
       cv.draw(&printer.offset(Vec2::new(c,r)));
@@ -69,17 +69,17 @@ impl cursive::view::View for BoardView {
     // print h lines
     for i in 0..10 {
       if i % 3 == 0 {
-        printer.print_hline((0, i * 4), BORDER_SIZE, "#");
+        printer.print_hline((0, i * CELL_HEIGHT), BORDER_WIDTH, "#");
       } else {
-        printer.print_hline((0, i * 4), BORDER_SIZE, "-");
+        printer.print_hline((0, i * CELL_HEIGHT), BORDER_WIDTH, "-");
       }
     }
     // print v lines
     for i in 0..10 {
       if i % 3 == 0 {
-        printer.print_vline((i * 4, 0), BORDER_SIZE, "#");
+        printer.print_vline((i * CELL_WIDTH, 0), BORDER_HEIGHT, "#");
       } else {
-        printer.print_vline((i * 4, 0), BORDER_SIZE, "⎮");
+        printer.print_vline((i * CELL_WIDTH, 0), BORDER_HEIGHT, "⎮");
       }
     }
   }
@@ -141,6 +141,44 @@ impl cursive::view::View for BoardView {
                 }
             }
           }
+          Event::Key(Key::Enter) => {
+
+          }
+          Event::Char(c) => {
+            if let Some(d) = c.to_digit(10) {
+              if d > 0 {
+                if let Some(index) = self.focused {
+                  let cv = &self.cellviews[index];
+                  let item = Rc::clone(&self.cells[index]);
+                  let mut cell = item.try_borrow_mut().unwrap();
+                  if matches!(cv.get_mode(), CellMode::Edit) {
+                    if !cell.is_fixed() {
+                      cell.set_value(d as u8);
+                    }
+                  } else {
+                    cell.toggle_candidate(d as u8);
+                  }
+                }
+              }
+            }
+            if c == 'd' {
+              if let Some(index) = self.focused {
+                let cv = &mut self.cellviews[index];
+                cv.set_mode(CellMode::Draft);
+                let item = Rc::clone(&self.cells[index]);
+                let mut cell = item.try_borrow_mut().unwrap();
+                if cell.num_candidates() == 0 {
+                  cell.fill_candidates();
+                }
+              }
+            }
+            if c == 'e' {
+              if let Some(index) = self.focused {
+                let cv = &mut self.cellviews[index];
+                cv.set_mode(CellMode::Edit);
+              }
+            }
+          }
           _ => (),
       }
 
@@ -148,6 +186,6 @@ impl cursive::view::View for BoardView {
   }
 
   fn required_size(&mut self, _: Vec2) -> Vec2 {
-      Vec2::new(BORDER_SIZE + 1, BORDER_SIZE + 1)
+      Vec2::new(BORDER_WIDTH + 1, BORDER_HEIGHT + 1)
   }
 }
