@@ -3,11 +3,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use cursive::{
   direction::Direction,
-  event::{Event, EventResult, MouseButton, MouseEvent},
+  event::EventResult,
   theme::{BaseColor, Color, ColorStyle},
   view::CannotFocus,
-  views::{Button, Dialog, LinearLayout, Panel, SelectView},
-  Cursive, Printer, Vec2,
+  Printer, Vec2,
 };
 
 #[derive(Debug, Copy, Clone)]

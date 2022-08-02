@@ -1,5 +1,3 @@
-use crate::generator;
-use std::borrow::BorrowMut;
 use std::sync::Arc;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -7,11 +5,9 @@ use crate::cell::Cell;
 use crate::cellview::{CellView, CellMode};
 use cursive::{
   direction::Direction,
-  event::{Event, Key, EventResult, MouseButton, MouseEvent},
-  theme::{BaseColor, Color, ColorStyle},
+  event::{Event, Key, EventResult},
   view::CannotFocus,
-  views::{Button, Dialog, LinearLayout, Panel, SelectView},
-  Cursive, Printer, Vec2,
+  Printer, Vec2,
 };
 
 const CELL_WIDTH: usize = 7;

@@ -1,7 +1,5 @@
-use cursive::{Cursive, Vec2};
+use cursive::Cursive;
 use cursive::views::{Dialog, LinearLayout, Panel};
-use cursive::event::{Event, Key};
-use std::borrow::{BorrowMut, Borrow};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
