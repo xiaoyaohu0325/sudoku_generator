@@ -1,5 +1,5 @@
-mod cell;
 mod board;
+mod cell;
 mod generator;
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ pub const SOLVED_VALUE: u16 = 511;
 pub struct Cell {
     value: u8,
     candidates: u16,
-    readonly: bool
+    readonly: bool,
 }
 
 pub fn one_hot(value: u8) -> u16 {
@@ -21,7 +21,7 @@ impl Cell {
         Cell {
             value: 0,
             candidates: 0,
-            readonly: false
+            readonly: false,
         }
     }
 
@@ -32,7 +32,6 @@ impl Cell {
     pub fn is_readonly(&self) -> bool {
         self.readonly
     }
-
 
     // return two value, (has_candidate, one_hot)
     pub fn has_candidate(&self, c: u8) -> (bool, u16) {
@@ -60,7 +59,7 @@ impl Cell {
 
     pub fn toggle_candidate(&mut self, c: u8) {
         if self.is_fixed() {
-            return
+            return;
         }
         let (has, candidate) = self.has_candidate(c);
         if has {
@@ -77,7 +76,8 @@ impl Cell {
         let (has, _) = self.has_candidate(c);
         if has {
             let count = self.num_candidates();
-            if count == 1 { // can not eliminate the last candidate
+            if count == 1 {
+                // can not eliminate the last candidate
                 return Err(c);
             }
             if count > 1 {
@@ -133,7 +133,7 @@ impl Cell {
     }
 
     pub fn get_value(&self) -> u8 {
-      self.value
+        self.value
     }
 
     pub fn set_readonly(&mut self, readonly: bool) {
@@ -163,10 +163,10 @@ impl Cell {
     }
 
     pub fn serialize(&self) -> char {
-      if self.is_fixed() {
-        return char::from_digit(self.value as u32, 10).unwrap();
-      }
-      '.'
+        if self.is_fixed() {
+            return char::from_digit(self.value as u32, 10).unwrap();
+        }
+        '.'
     }
 }
 

@@ -1,75 +1,75 @@
-use crate::{board::Board, board::game_str_to_vec};
-use rand::{self, thread_rng, prelude::SliceRandom};
+use crate::{board::game_str_to_vec, board::Board};
+use rand::{self, prelude::SliceRandom, thread_rng};
 
 const MIN_CELLS: u8 = 17;
 
 pub fn generate_game() -> String {
-  let mut board = Board::new();
-  board.fill_candidates();
+    let mut board = Board::new();
+    board.fill_candidates();
 
-  // set 1-9 randomly to nine of the cells
-  for i in 0..9 {
-    let index = select_non_fixed(&board);
-    board.assign_cell(index, i + 1);
-  }
-
-  let board_state = board.backup();
-  try_init_game(&mut board);
-
-  loop {
-    let (solved, _) = try_solve_game(&mut board); // board.solve_concurrent(); //
-    if !solved {
-      println!("can not solve, try another init");
-      board.restore(&board_state);
-      try_init_game(&mut board);
-    } else {
-      break;
+    // set 1-9 randomly to nine of the cells
+    for i in 0..9 {
+        let index = select_non_fixed(&board);
+        board.assign_cell(index, i + 1);
     }
-  }
 
-  board.serialize()
+    let board_state = board.backup();
+    try_init_game(&mut board);
+
+    loop {
+        let (solved, _) = try_solve_game(&mut board); // board.solve_concurrent(); //
+        if !solved {
+            println!("can not solve, try another init");
+            board.restore(&board_state);
+            try_init_game(&mut board);
+        } else {
+            break;
+        }
+    }
+
+    board.serialize()
 }
 
 pub fn dig_holes(game: &str) -> String {
-  let remain_cells = MIN_CELLS + random_index(6);
-  let mut can_dig_cells = [true; 81];
-  let mut game_vec = game_str_to_vec(game).unwrap();
-  let mut total = 81;
+    let remain_cells = MIN_CELLS + random_index(6);
+    let mut can_dig_cells = [true; 81];
+    let mut game_vec = game_str_to_vec(game).unwrap();
+    let mut total = 81;
 
-  while total > remain_cells {
-    let start = next_diggable_index(&can_dig_cells);
-    if start > 80 {
-      break;
-    }
+    while total > remain_cells {
+        let start = next_diggable_index(&can_dig_cells);
+        if start > 80 {
+            break;
+        }
 
-    if is_game_has_unique_solution(&mut game_vec, start as usize) {
-      game_vec[start] = 0;
-      total -= 1;
+        if is_game_has_unique_solution(&mut game_vec, start as usize) {
+            game_vec[start] = 0;
+            total -= 1;
+        }
+        can_dig_cells[start] = false;
     }
-    can_dig_cells[start] = false;
-  }
-  game_vec.into_iter().map(|item| item.to_string()).collect()
+    game_vec.into_iter().map(|item| item.to_string()).collect()
 }
 
-fn next_diggable_index(diggable_cells: &[bool;81]) -> usize {
-  let mut candidates = Vec::new();
+fn next_diggable_index(diggable_cells: &[bool; 81]) -> usize {
+    let mut candidates = Vec::new();
 
-  for index in 0..81 {
-    if diggable_cells[index] {
-      candidates.push(index);
+    for index in 0..81 {
+        if diggable_cells[index] {
+            candidates.push(index);
+        }
     }
-  }
-  if candidates.len() > 0 {
-    let mut rng = thread_rng();
-    candidates.shuffle(&mut rng);
-    return candidates[0];
-  }
+    if candidates.len() > 0 {
+        let mut rng = thread_rng();
+        candidates.shuffle(&mut rng);
+        return candidates[0];
+    }
 
-  return 81;
+    return 81;
 }
 
 fn random_index(total: u8) -> u8 {
-  rand::random::<u8>() % total
+    rand::random::<u8>() % total
 }
 
 /**
@@ -86,36 +86,36 @@ fn random_index(total: u8) -> u8 {
  * operation of digging out the digit 6 is feasible and legal.
  */
 fn is_game_has_unique_solution(game_vec: &mut Vec<u8>, index: usize) -> bool {
-  let cell_value = game_vec[index];
+    let cell_value = game_vec[index];
 
-  for value in 1..10 {
-    if value == cell_value {
-      continue;
-    }
-    game_vec[index] = value;
-    if Board::is_valid_game(game_vec) {
-      let mut board = Board::new();
-      if let Ok(_) = board.init(game_vec) {
-        let (solved, _) = try_solve_game(&mut board);
-        if solved {
-          game_vec[index] = cell_value; // restore
-          return false;
+    for value in 1..10 {
+        if value == cell_value {
+            continue;
         }
-      }
+        game_vec[index] = value;
+        if Board::is_valid_game(game_vec) {
+            let mut board = Board::new();
+            if let Ok(_) = board.init(game_vec) {
+                let (solved, _) = try_solve_game(&mut board);
+                if solved {
+                    game_vec[index] = cell_value; // restore
+                    return false;
+                }
+            }
+        }
     }
-  }
-  true
+    true
 }
 
 fn select_non_fixed(board: &Board) -> u8 {
-  loop {
-    let next_id = random_index(81);
-    let cell = &board.cells[next_id as usize];
-    if cell.is_fixed() {
-      continue;
+    loop {
+        let next_id = random_index(81);
+        let cell = &board.cells[next_id as usize];
+        if cell.is_fixed() {
+            continue;
+        }
+        return next_id;
     }
-    return next_id;
-  }
 }
 
 /**
@@ -125,101 +125,101 @@ fn select_non_fixed(board: &Board) -> u8 {
  * puzzles.
  */
 fn try_init_game(board: &mut Board) {
-  let mut count = 0;
-  loop {
-    let index:u8 = select_non_fixed(&board);
-    let cell = &board.cells[index as usize];
-    let mut candidates = cell.collect_candidates();
-    let mut rng = thread_rng();
-    candidates.shuffle(&mut rng);
+    let mut count = 0;
+    loop {
+        let index: u8 = select_non_fixed(&board);
+        let cell = &board.cells[index as usize];
+        let mut candidates = cell.collect_candidates();
+        let mut rng = thread_rng();
+        candidates.shuffle(&mut rng);
 
-    let board_state = board.backup();
+        let board_state = board.backup();
 
-    for c in &candidates {
-      let assign_result = board.assign_cell(index, *c);
-      if assign_result {
-        count += 1;
-        break;
-      } else {
-        board.restore(&board_state);
-      }
+        for c in &candidates {
+            let assign_result = board.assign_cell(index, *c);
+            if assign_result {
+                count += 1;
+                break;
+            } else {
+                board.restore(&board_state);
+            }
+        }
+        if count >= 2 {
+            break;
+        }
     }
-    if count >= 2 {
-      break;
-    }
-  }
 }
 
 fn try_solve_game(board: &mut Board) -> (bool, usize) {
-  if board.is_solved() {
-    return (true, 0);
-  }
-
-  let (index, mut candidates) = board.next_candidate_cell();
-  let mut rng = thread_rng();
-  candidates.shuffle(&mut rng);
-  let board_state = board.backup();
-  let mut steps: usize = 0;
-
-  for c in candidates {
-    steps += 1;
-    if steps > 100 {
-      // too many steps, try another solution
-      return (false, steps);
+    if board.is_solved() {
+        return (true, 0);
     }
 
-    let assign_result = board.assign_cell(index, c);
-    if assign_result {
-      // assign succeed, continue to solve the game
-      let (solve_result, solve_steps) = try_solve_game(board);
-      steps += solve_steps;
+    let (index, mut candidates) = board.next_candidate_cell();
+    let mut rng = thread_rng();
+    candidates.shuffle(&mut rng);
+    let board_state = board.backup();
+    let mut steps: usize = 0;
 
-      if solve_result {
-        return (true, steps);
-      }
+    for c in candidates {
+        steps += 1;
+        if steps > 100 {
+            // too many steps, try another solution
+            return (false, steps);
+        }
+
+        let assign_result = board.assign_cell(index, c);
+        if assign_result {
+            // assign succeed, continue to solve the game
+            let (solve_result, solve_steps) = try_solve_game(board);
+            steps += solve_steps;
+
+            if solve_result {
+                return (true, steps);
+            }
+        }
+        // current candidate failed
+        // restore the board and test next candidate
+        board.restore(&board_state);
     }
-    // current candidate failed
-    // restore the board and test next candidate
-    board.restore(&board_state);
-  }
 
-  // all candidates failed
-  (false, steps)
+    // all candidates failed
+    (false, steps)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{random_index, generate_game, dig_holes};
-    use rand::{self, thread_rng, prelude::SliceRandom};
-    use crate::board::{Board, game_str_to_vec};
+    use super::{dig_holes, generate_game, random_index};
+    use crate::board::{game_str_to_vec, Board};
+    use rand::{self, prelude::SliceRandom, thread_rng};
 
     #[test]
     fn test_random_index() {
-      println!("{}", random_index(81));
-      println!("{}", random_index(81));
-      println!("{}", random_index(81));
+        println!("{}", random_index(81));
+        println!("{}", random_index(81));
+        println!("{}", random_index(81));
     }
 
     #[test]
     fn test_shuffle() {
-      let mut v = vec![1,2,3,4,5,6,7,8,9];
-      let mut rng = thread_rng();
-      v.shuffle(&mut rng);
-      println!("Shuffled:   {:?}", v);
+        let mut v = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let mut rng = thread_rng();
+        v.shuffle(&mut rng);
+        println!("Shuffled:   {:?}", v);
     }
 
     #[test]
     fn test_genera_new_game() {
-      let g = generate_game();
-      println!("{}", g);
-      let p = dig_holes(&g);
-      println!("{}", p);
+        let g = generate_game();
+        println!("{}", g);
+        let p = dig_holes(&g);
+        println!("{}", p);
 
-      let mut board = Board::new();
-      let game_vec = game_str_to_vec(&p).unwrap();
-      board.init(&game_vec).unwrap();
-      let success = board.solve();
-      assert_eq!(success, true);
-      println!("{}", board.serialize());
+        let mut board = Board::new();
+        let game_vec = game_str_to_vec(&p).unwrap();
+        board.init(&game_vec).unwrap();
+        let success = board.solve();
+        assert_eq!(success, true);
+        println!("{}", board.serialize());
     }
 }
