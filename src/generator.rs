@@ -97,19 +97,11 @@ fn is_game_has_unique_solution(game_vec: &mut Vec<u8>, index: usize) -> bool {
                 let (solved, _) = try_solve_game(&mut board);
                 if solved {
                     game_vec[index] = cell_value; // restore
-                    println!("multiple solution, not legal to dig a hole at {}", index);
                     return false;
-                } else {
-                    println!("cannot solve, {} is not valid at {}", value, index);
                 }
-            } else {
-                println!("init failed, {} is not valid at {}", value, index);
             }
-        } else {
-            println!("{} is not valid at {}", value, index);
         }
     }
-    println!("save to dig a hole at {}", index);
     true
 }
 
@@ -195,7 +187,7 @@ fn try_solve_game(board: &mut Board) -> (bool, usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::{dig_holes, generate_game, random_index};
+    use super::{dig_holes, generate_game, random_index, try_solve_game};
     use crate::board::{game_str_to_vec, Board};
     use rand::{self, prelude::SliceRandom, thread_rng};
 
@@ -227,5 +219,15 @@ mod tests {
         let success = board.solve();
         assert_eq!(success, true);
         println!("{}", board.serialize());
+    }
+
+    #[test]
+    fn test_try_solve() {
+        let game = ".2..194..5.9423618.137865.9..7932146.62147.95194.6.2737.1.549628356.17..94.278351";
+        let vec = game_str_to_vec(game).unwrap();
+        let mut board = Board::new();
+        assert_eq!(Ok(true), board.init(&vec));
+        let (solved, _) = try_solve_game(&mut board);
+        assert_eq!(solved, false);
     }
 }

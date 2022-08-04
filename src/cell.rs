@@ -109,6 +109,7 @@ impl Cell {
         match self.num_candidates() {
             1 => {
                 self.value = (self.candidates.trailing_zeros() as u8) + 1;
+                self.candidates = 0;
                 Some(self.value)
             }
             _ => None,
