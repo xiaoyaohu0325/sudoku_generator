@@ -93,9 +93,7 @@ impl Cell {
     }
 
     pub fn fill_candidates(&mut self) {
-        if !self.is_fixed() {
-            self.candidates = SOLVED_VALUE;
-        }
+        self.candidates = SOLVED_VALUE;
     }
 
     pub fn clear_candidates(&mut self) {

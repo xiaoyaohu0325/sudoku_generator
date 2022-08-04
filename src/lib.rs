@@ -1,6 +1,6 @@
 mod board;
 mod cell;
-mod generator;
+pub mod generator;
 
 #[cfg(test)]
 mod tests {

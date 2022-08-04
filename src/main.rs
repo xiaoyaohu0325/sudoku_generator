@@ -9,7 +9,7 @@ mod board;
 mod boardview;
 mod cell;
 mod cellview;
-mod generator;
+pub mod generator;
 
 fn main() {
     let mut cells: Arc<Vec<Rc<RefCell<cell::Cell>>>> = Arc::new(Vec::new());

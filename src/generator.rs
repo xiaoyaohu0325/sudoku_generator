@@ -5,23 +5,22 @@ const MIN_CELLS: u8 = 17;
 
 pub fn generate_game() -> String {
     let mut board = Board::new();
-    board.fill_candidates();
-
-    // set 1-9 randomly to nine of the cells
-    for i in 0..9 {
-        let index = select_non_fixed(&board);
-        board.assign_cell(index, i + 1);
-    }
-
-    let board_state = board.backup();
-    try_init_game(&mut board);
 
     loop {
+        board.reset();
+        board.fill_candidates();
+
+        // set 1-9 randomly to nine of the cells
+        for i in 0..9 {
+            let index = select_non_fixed(&board);
+            board.assign_cell(index, i + 1);
+        }
+
+        try_init_game(&mut board);
         let (solved, _) = try_solve_game(&mut board); // board.solve_concurrent(); //
+
         if !solved {
             println!("can not solve, try another init");
-            board.restore(&board_state);
-            try_init_game(&mut board);
         } else {
             break;
         }
@@ -60,9 +59,8 @@ fn next_diggable_index(diggable_cells: &[bool; 81]) -> usize {
         }
     }
     if candidates.len() > 0 {
-        let mut rng = thread_rng();
-        candidates.shuffle(&mut rng);
-        return candidates[0];
+        let random_idx = random_index(candidates.len() as u8);
+        return candidates[random_idx as usize];
     }
 
     return 81;
@@ -99,11 +97,19 @@ fn is_game_has_unique_solution(game_vec: &mut Vec<u8>, index: usize) -> bool {
                 let (solved, _) = try_solve_game(&mut board);
                 if solved {
                     game_vec[index] = cell_value; // restore
+                    println!("multiple solution, not legal to dig a hole at {}", index);
                     return false;
+                } else {
+                    println!("cannot solve, {} is not valid at {}", value, index);
                 }
+            } else {
+                println!("init failed, {} is not valid at {}", value, index);
             }
+        } else {
+            println!("{} is not valid at {}", value, index);
         }
     }
+    println!("save to dig a hole at {}", index);
     true
 }
 
