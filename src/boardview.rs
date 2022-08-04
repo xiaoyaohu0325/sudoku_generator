@@ -160,9 +160,6 @@ impl cursive::view::View for BoardView {
                 }
             }
           }
-          Event::Key(Key::Enter) => {
-
-          }
           Event::Char(c) => {
             if let Some(d) = c.to_digit(10) {
               if d > 0 {
@@ -223,7 +220,7 @@ impl cursive::view::View for BoardView {
           _ => (),
       }
 
-      EventResult::Consumed(None)
+      EventResult::Ignored
   }
 
   fn required_size(&mut self, _: Vec2) -> Vec2 {

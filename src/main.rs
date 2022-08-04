@@ -1,5 +1,6 @@
 use cursive::Cursive;
 use cursive::views::{Dialog, LinearLayout, Panel};
+use cursive::event::Key;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -32,20 +33,26 @@ fn main() {
               LinearLayout::horizontal()
                   .child(Panel::new(bv)),
           )
-          .button("New", move |_| {
-            new_game(&new_cells);
-          })
-          .button("Reset", move |_| {
-            reset_game(&reset_cells);
-          })
-          .button("Check", move |s| {
-            check_game(s, &check_cells);
-          })
-          .button("Quit", |s| {
-              s.quit();
-          })
     );
-    siv.add_global_callback('q', |s| s.quit());
+
+    siv.menubar()
+      .add_leaf("New", move |_| {
+        new_game(&new_cells);
+      })
+      .add_leaf("Reset", move |_| {
+        reset_game(&reset_cells);
+      })
+      .add_leaf("Check", move |s| {
+        check_game(s, &check_cells);
+      })
+      .add_leaf("Quit", |s| {
+        s.quit();
+      });
+
+    // When `autohide` is on (default), the menu only appears when active.
+    // Turning it off will leave the menu always visible.
+    siv.set_autohide_menu(false);
+    siv.add_global_callback(Key::Esc, |s| s.select_menubar());
 
     siv.run();
 }
