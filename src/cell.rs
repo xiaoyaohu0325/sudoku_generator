@@ -102,6 +102,10 @@ impl Cell {
         self.candidates = 0;
     }
 
+    pub fn clear_value(&mut self) {
+        self.value = 0;
+    }
+
     // apply candidate to self.value if there is only one candidate
     pub fn apply_candidate(&mut self) -> Option<u8> {
         match self.num_candidates() {

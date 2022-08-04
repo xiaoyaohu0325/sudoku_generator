@@ -176,6 +176,16 @@ impl cursive::view::View for BoardView {
                 cv.set_mode(CellMode::Edit);
               }
             }
+            if c == 'c' {
+              if let Some(index) = self.focused {
+                let item = Rc::clone(&self.cells[index]);
+                let mut cell = item.try_borrow_mut().unwrap();
+                if !cell.is_readonly() {
+                  cell.clear_value();
+                  cell.clear_candidates();
+                }
+              }
+            }
           }
           _ => (),
       }
