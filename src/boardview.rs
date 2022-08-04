@@ -28,7 +28,7 @@ impl BoardView {
     let mut cellviews = Vec::new();
     for i in 0..81 {
       let cell = &cells[i];
-      let cv = CellView::new(Rc::clone(cell), CellMode::Edit, false);
+      let cv = CellView::new(Rc::clone(cell));
       cellviews.push(cv);
     }
     BoardView {
@@ -52,6 +52,27 @@ impl BoardView {
         }
     }
     self.focused = Some(index);
+
+    // clear all highlighted
+    for cv in &mut self.cellviews {
+      cv.set_highlight(false);
+    }
+
+    // set highlight cells that has the same value as current focused one
+    let item = &self.cells[index];
+    let cell = item.borrow();
+    let is_fixed = cell.is_fixed();
+    let v = cell.get_value();
+    if is_fixed {
+      for i in 0..81 {
+        let item = &self.cells[i];
+        let c = item.borrow();
+        if c.get_value() == v {
+          let cv = &mut self.cellviews[i as usize];
+          cv.set_highlight(true);
+        }
+      }
+    }
   }
 }
 
@@ -152,6 +173,18 @@ impl cursive::view::View for BoardView {
                   if matches!(cv.get_mode(), CellMode::Edit) {
                     if !cell.is_fixed() {
                       cell.set_value(d as u8);
+                      // set highlight cells that has the same value as current focused one
+                      for i in 0..81 {
+                        if i == index {
+                          continue
+                        }
+                        let item = &self.cells[i];
+                        let c = item.borrow();
+                        if c.get_value() == d as u8 {
+                          let cv = &mut self.cellviews[i];
+                          cv.set_highlight(true);
+                        }
+                      }
                     }
                   } else {
                     cell.toggle_candidate(d as u8);

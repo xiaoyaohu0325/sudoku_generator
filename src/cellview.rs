@@ -6,7 +6,8 @@ use cursive::{
   event::EventResult,
   theme::{BaseColor, Color, ColorStyle},
   view::CannotFocus,
-  Printer, Vec2,
+  Rect,
+  Printer, Vec2
 };
 
 #[derive(Debug, Copy, Clone)]
@@ -17,18 +18,23 @@ pub enum CellMode {
 pub struct CellView {
   cell: Rc<RefCell<Cell>>,
   mode: CellMode,
-  active: bool
+  active: bool,
+  highlight: bool
 }
 
 impl CellView {
-  pub fn new(cell: Rc<RefCell<Cell>>, mode: CellMode, active: bool) -> Self {
+  pub fn new(cell: Rc<RefCell<Cell>>) -> Self {
     CellView {
-      cell, mode, active
+      cell, mode: CellMode::Edit, active: false, highlight: false
     }
   }
 
   pub fn set_active(&mut self, active: bool) {
     self.active = active;
+  }
+
+  pub fn set_highlight(&mut self, highlight: bool) {
+    self.highlight = highlight;
   }
 
   pub fn set_mode(&mut self, mode: CellMode) {
@@ -38,45 +44,52 @@ impl CellView {
   pub fn get_mode(&self) -> CellMode {
     self.mode
   }
-
-  fn print_value(&self, printer: &Printer, value: u8, pos: Vec2, with_style: bool) {
-    let mut v_str = ".";
-    let formated_value = format!("{}", value);
-    if value > 0 {
-      v_str = formated_value.as_str();
-    }
-    if with_style {
-      printer.with_color(
-        ColorStyle::new(Color::Dark(BaseColor::Black), Color::Light(BaseColor::White)),
-        |printer| printer.print(pos, v_str),
-      );
-    } else {
-      printer.print(pos, v_str);
-    }
-  }
 }
 
 impl cursive::view::View for CellView {
   fn draw(&self, printer: &Printer) {
     let cellref = self.cell.borrow();
-    if cellref.is_fixed() {
-      if cellref.is_readonly() {
-        printer.with_color(
-          ColorStyle::new(Color::Dark(BaseColor::Black), Color::RgbLowRes(5, 0, 3)),
-          |printer| printer.print(Vec2::new(2, 1), format!("{}", cellref.get_value()).as_str()),
-        );
+
+    // three status: normal, active (currently selected cell), highlight (has the same value as the selected cell)
+    // two types of cell: readonly, editable
+    let style = if cellref.is_readonly() {
+      if self.active {
+        ColorStyle::title_primary()
+      } else if self.highlight {
+        ColorStyle::highlight_inactive()
       } else {
-        self.print_value(printer, cellref.get_value(), Vec2::new(2, 1), self.active);
+        ColorStyle::secondary()
       }
+    } else {
+      if self.active {
+        ColorStyle::highlight()
+      } else if self.highlight {
+        ColorStyle::highlight_inactive()
+      } else {
+        ColorStyle::primary()
+      }
+    };
+
+    if cellref.is_fixed() {
+      printer.with_color(
+        style,
+        |printer| printer.print((2, 1), format!("{}", cellref.get_value()).as_str()),
+      );
     } else {
       for v in 0..9 {
         let r = v / 3;
         let c = (v % 3) * 2;
 
         if cellref.has_candidate(v+1 as u8).0 && matches!(self.mode, CellMode::Draft) {
-          self.print_value(printer, v+1, Vec2::new(c as usize, r as usize), self.active);
+          printer.with_color(
+            style,
+            |printer| printer.print((c as usize, r as usize), format!("{}", v+1).as_str()),
+          );
         } else {
-          self.print_value(printer, 0, Vec2::new(c as usize, r as usize), self.active);
+          printer.with_color(
+            style,
+            |printer| printer.print((c as usize, r as usize), "."),
+          );
         }
       }
     }
@@ -91,5 +104,9 @@ impl cursive::view::View for CellView {
 
   fn required_size(&mut self, _: Vec2) -> Vec2 {
     Vec2::new(6, 3)
+  }
+
+  fn important_area(&self, view_size: Vec2) -> Rect {
+    Rect::from_size((0, 0), view_size)
   }
 }
